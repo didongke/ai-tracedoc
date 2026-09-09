@@ -4,11 +4,15 @@ import os
 import sys
 import tempfile
 import unittest
+from datetime import timedelta, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "src"))  # 让 tests.test_extract 从仓库根目录可运行
 
+import tracedoc.extract as extract
 from tracedoc.extract import extract_sessions, is_human_question, iter_records_from
+
+TZ8 = timezone(timedelta(hours=8))
 
 
 def dumps(obj):
@@ -110,22 +114,40 @@ class TestIsHumanQuestion(unittest.TestCase):
         self.assertFalse(is_human_question(assistant([text_block("hi")])))
 
 
+class TestFormatLocalTime(unittest.TestCase):
+    def test_utc_z_converted_to_given_tz(self):
+        self.assertEqual(
+            extract._format_local_time("2026-09-06T10:00:00.000Z", TZ8),
+            "2026-09-06 18:00")
+
+    def test_crosses_midnight(self):
+        self.assertEqual(
+            extract._format_local_time("2026-09-06T23:30:00Z", TZ8),
+            "2026-09-07 07:30")
+
+    def test_invalid_or_missing_returns_empty(self):
+        self.assertEqual(extract._format_local_time(""), "")
+        self.assertEqual(extract._format_local_time("not-a-time"), "")
+
+
 class TestExtractSessions(unittest.TestCase):
     def test_basic_qa(self):
         records = [human("怎么设计缓存？"),
                    assistant([{"type": "thinking", "thinking": "内部思考"},
                               text_block("建议用 LRU。")])]
-        sessions = extract_sessions(records)
+        sessions = extract_sessions(records, tz=TZ8)
         self.assertEqual(len(sessions), 1)
-        self.assertEqual(sessions[0]["entries"],
-                         [{"q": "怎么设计缓存？", "a": "建议用 LRU。"}])
+        self.assertEqual(
+            sessions[0]["entries"],
+            [{"q": "怎么设计缓存？", "a": "建议用 LRU。",
+              "t": "2026-09-06 18:00"}])
 
     def test_answer_takes_last_assistant_only(self):
         records = [human("q"),
                    assistant([text_block("我先看看。"), tool_use_block("Read")]),
                    tool_result_user(),
                    assistant([text_block("最终结论在这里。")])]
-        sessions = extract_sessions(records)
+        sessions = extract_sessions(records, tz=TZ8)
         self.assertEqual(sessions[0]["entries"][0]["a"], "最终结论在这里。")
 
     def test_answer_empty_when_ends_with_tool_use(self):
@@ -133,29 +155,30 @@ class TestExtractSessions(unittest.TestCase):
                    assistant([text_block("我先看看。"), tool_use_block("Read")]),
                    tool_result_user(),
                    assistant([tool_use_block("Edit")])]
-        sessions = extract_sessions(records)
+        sessions = extract_sessions(records, tz=TZ8)
         self.assertIsNone(sessions[0]["entries"][0]["a"])
 
     def test_multiple_text_blocks_joined(self):
         records = [human("q"),
                    assistant([text_block("第一段。"), text_block("第二段。")])]
-        sessions = extract_sessions(records)
+        sessions = extract_sessions(records, tz=TZ8)
         self.assertEqual(sessions[0]["entries"][0]["a"], "第一段。\n\n第二段。")
 
     def test_consecutive_questions_each_get_entry(self):
         records = [human("q1"),
                    assistant([text_block("a1")]),
                    human("q2")]
-        sessions = extract_sessions(records)
+        sessions = extract_sessions(records, tz=TZ8)
         self.assertEqual([e["q"] for e in sessions[0]["entries"]], ["q1", "q2"])
         self.assertEqual(sessions[0]["entries"][1]["a"], None)
+        self.assertEqual(sessions[0]["entries"][1]["t"], "2026-09-06 18:00")
 
     def test_sidechain_assistant_ignored(self):
         side = assistant([text_block("子代理的话")])
         side["isSidechain"] = True
         records = [human("q"), side,
                    assistant([text_block("真正的回答。")])]
-        sessions = extract_sessions(records)
+        sessions = extract_sessions(records, tz=TZ8)
         self.assertEqual(sessions[0]["entries"][0]["a"], "真正的回答。")
 
     def test_title_last_ai_title_wins(self):
@@ -177,13 +200,26 @@ class TestExtractSessions(unittest.TestCase):
     def test_session_date_from_first_question(self):
         records = [human("q", ts="2026-09-06T10:00:00.000Z"),
                    assistant([text_block("a")])]
-        sessions = extract_sessions(records)
+        sessions = extract_sessions(records, tz=TZ8)
         self.assertEqual(sessions[0]["date"], "2026-09-06")
+
+    def test_session_date_follows_local_time(self):
+        """本地时间跨天时，会话头日期取本地日期（UTC 23:30 → 本地次日 07:30）。"""
+        records = [human("q", ts="2026-09-06T23:30:00Z"),
+                   assistant([text_block("a")])]
+        sessions = extract_sessions(records, tz=TZ8)
+        self.assertEqual(sessions[0]["date"], "2026-09-07")
+
+    def test_missing_timestamp_yields_empty_time(self):
+        r = human("q")
+        del r["timestamp"]
+        sessions = extract_sessions([r, assistant([text_block("a")])], tz=TZ8)
+        self.assertEqual(sessions[0]["entries"][0]["t"], "")
 
     def test_multiple_sessions_grouped_in_order(self):
         records = [human("q1", sid="s1"), assistant([text_block("a1")], sid="s1"),
                    human("q2", sid="s2"), assistant([text_block("a2")], sid="s2")]
-        sessions = extract_sessions(records)
+        sessions = extract_sessions(records, tz=TZ8)
         self.assertEqual([s["session_id"] for s in sessions], ["s1", "s2"])
 
 

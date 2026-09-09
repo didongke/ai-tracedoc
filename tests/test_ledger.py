@@ -100,11 +100,11 @@ class TestFormatters(unittest.TestCase):
         self.assertIn("<!-- session: s1 -->", text)
 
     def test_format_entries_with_and_without_answer(self):
-        text = ledger.format_entries([{"q": "q1", "a": "a1"},
+        text = ledger.format_entries([{"q": "q1", "a": "a1", "t": "2026-09-06 18:00"},
                                       {"q": "q2", "a": None}])
-        self.assertIn("**问：** q1", text)
+        self.assertIn("**问：** 2026-09-06 18:00 · q1", text)
         self.assertIn("**答：** a1", text)
-        self.assertIn("**问：** q2", text)
+        self.assertIn("**问：** q2", text)   # 无时间戳条目：不带时间前缀
         self.assertEqual(text.count("**答：**"), 1)
 
 

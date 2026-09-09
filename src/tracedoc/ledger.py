@@ -86,10 +86,13 @@ def format_session_header(date_str, title, session_id):
 
 
 def format_entries(entries):
-    """问答条目 → Markdown。a 为 None 时只写问、不写答行。"""
+    """问答条目 → Markdown。a 为 None 时只写问、不写答行；t 非空时问前带本地时间。"""
     parts = []
     for entry in entries:
-        parts.append("**问：** %s\n" % entry["q"])
+        if entry.get("t"):
+            parts.append("**问：** %s · %s\n" % (entry["t"], entry["q"]))
+        else:
+            parts.append("**问：** %s\n" % entry["q"])
         if entry.get("a"):
             parts.append("\n**答：** %s\n" % entry["a"])
         parts.append("")

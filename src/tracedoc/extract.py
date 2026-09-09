@@ -64,20 +64,40 @@ def _fallback_title(entries):
     return first
 
 
+def _format_local_time(timestamp, tz=None):
+    """把转录的 UTC 时间戳转成本地时间，格式 %Y-%m-%d %H:%M。
+
+    tz 供测试注入；默认系统本地时区。缺失或无法解析返回空串。
+    """
+    if not timestamp:
+        return ""
+    try:
+        parsed = datetime.datetime.fromisoformat(
+            str(timestamp).replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    if tz is not None:
+        parsed = parsed.astimezone(tz)
+    else:
+        parsed = parsed.astimezone()
+    return parsed.strftime("%Y-%m-%d %H:%M")
+
+
 def _today():
     return datetime.date.today().strftime("%Y-%m-%d")
 
 
-def extract_sessions(records):
+def extract_sessions(records, tz=None):
     """把记录流按 sessionId 分组为会话问答。
 
-    返回 [{"session_id","title","date","entries":[{"q","a"}]}]，按出现顺序。
-    a 为 None 表示该提问没有文字总结。
+    返回 [{"session_id","title","date","entries":[{"q","a","t"}]}]，按出现顺序。
+    a 为 None 表示该提问没有文字总结；t 为该提问的本地时间
+    （%Y-%m-%d %H:%M，tz 供测试注入，默认系统本地时区），缺失为空串。
     """
     session_map = {}
     titles = {}
     dates = {}
-    pending = None          # {"session_id","q","a"}
+    pending = None          # {"session_id","q","a","t"}
     last_assistant = None   # 当前提问之后出现的最后一条 assistant 记录
 
     def flush():
@@ -88,7 +108,8 @@ def extract_sessions(records):
         sid = pending["session_id"]
         bucket = session_map.setdefault(
             sid, {"session_id": sid, "title": "", "date": "", "entries": []})
-        bucket["entries"].append({"q": pending["q"], "a": pending["a"]})
+        bucket["entries"].append(
+            {"q": pending["q"], "a": pending["a"], "t": pending["t"]})
 
     for record in records:
         kind = record.get("type")
@@ -105,7 +126,8 @@ def extract_sessions(records):
             if sid:
                 dates.setdefault(sid, (record.get("timestamp") or "")[:10])
             pending = {"session_id": sid,
-                       "q": record["message"]["content"], "a": None}
+                       "q": record["message"]["content"], "a": None,
+                       "t": _format_local_time(record.get("timestamp"), tz)}
             last_assistant = None
     flush()
 
@@ -113,6 +135,7 @@ def extract_sessions(records):
     for sid in session_map:
         session = session_map[sid]
         session["title"] = titles.get(sid) or _fallback_title(session["entries"])
-        session["date"] = dates.get(sid) or _today()
+        first_t = session["entries"][0]["t"]
+        session["date"] = first_t[:10] or dates.get(sid) or _today()
         sessions.append(session)
     return sessions
