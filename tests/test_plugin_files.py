@@ -20,16 +20,17 @@ class TestPluginFiles(unittest.TestCase):
         path = os.path.join(ROOT, "hooks", "hooks.json")
         with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
-        self.assertIn("SessionEnd", data["hooks"])
-        hooks = data["hooks"]["SessionEnd"]
-        self.assertEqual(hooks[0]["matcher"], "*")
-        hook_entry = hooks[0]["hooks"][0]
-        self.assertEqual(hook_entry["type"], "command")
-        self.assertEqual(
-            hook_entry["command"],
-            'python3 "${CLAUDE_PLUGIN_ROOT}/hooks/record-session.py"',
-        )
-        self.assertEqual(hook_entry["timeout"], 30)
+        for event in ("SessionEnd", "Stop"):
+            self.assertIn(event, data["hooks"])
+            hooks = data["hooks"][event]
+            self.assertEqual(hooks[0]["matcher"], "*")
+            hook_entry = hooks[0]["hooks"][0]
+            self.assertEqual(hook_entry["type"], "command")
+            self.assertEqual(
+                hook_entry["command"],
+                'python3 "${CLAUDE_PLUGIN_ROOT}/hooks/record-session.py"',
+            )
+            self.assertEqual(hook_entry["timeout"], 30)
 
 
 if __name__ == "__main__":

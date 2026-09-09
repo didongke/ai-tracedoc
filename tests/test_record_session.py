@@ -42,9 +42,9 @@ def write_transcript(path, records):
             fh.write(dumps(r) + "\n")
 
 
-def run_hook(cwd, transcript, session_id="s1"):
+def run_hook(cwd, transcript, session_id="s1", hook_event_name="SessionEnd"):
     payload = {"session_id": session_id, "transcript_path": transcript,
-               "cwd": cwd, "reason": "other"}
+               "cwd": cwd, "reason": "other", "hook_event_name": hook_event_name}
     proc = subprocess.run(
         [sys.executable, SCRIPT], input=json.dumps(payload),
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -134,6 +134,43 @@ class TestHookRun(AdapterTest):
         content = self.ledger_content()
         self.assertIn("新问题", content)
         self.assertEqual(content.count("怎么设计缓存？"), 1)
+
+    def test_stop_hook_incomplete_chain_deferred(self):
+        """Stop 模式：末链以工具调用收尾 → 不入账、偏移不推进；链完成后补入且不重复。"""
+        self.enable_marker()
+        with open(self.transcript, "w", encoding="utf-8") as fh:
+            fh.write(dumps(human("q1")) + "\n")
+            fh.write(dumps(assistant("a1")) + "\n")
+            fh.write(dumps(human("q2")) + "\n")
+            fh.write(dumps(tool_use("Edit")) + "\n")
+        run_hook(self.tmp, self.transcript, hook_event_name="Stop")
+        content = self.ledger_content()
+        self.assertIn("q1", content)
+        self.assertIn("a1", content)
+        self.assertNotIn("q2", content)   # 未完成链不入账
+        # 第二段：q2 的回答完成（同一转录继续追加）
+        with open(self.transcript, "a", encoding="utf-8") as fh:
+            fh.write(dumps(assistant("a2")) + "\n")
+        run_hook(self.tmp, self.transcript, hook_event_name="Stop")
+        content = self.ledger_content()
+        self.assertIn("q2", content)
+        self.assertIn("a2", content)
+        # 条目带时间前缀；会话头回退标题也含 q1，故数条目标记数
+        self.assertEqual(content.count("**问：** "), 2)   # q1+q2 各一条，无重复
+
+    def test_sessionend_records_incomplete_chain_question_only(self):
+        """SessionEnd 模式：末链以工具调用收尾 → 记问不记答，全部消费。"""
+        self.enable_marker()
+        with open(self.transcript, "w", encoding="utf-8") as fh:
+            fh.write(dumps(human("q1")) + "\n")
+            fh.write(dumps(assistant("a1")) + "\n")
+            fh.write(dumps(human("q2")) + "\n")
+            fh.write(dumps(tool_use("Edit")) + "\n")
+        run_hook(self.tmp, self.transcript, hook_event_name="SessionEnd")
+        content = self.ledger_content()
+        self.assertEqual(content.count("**问：**"), 2)
+        self.assertEqual(content.count("**答：**"), 1)   # 只有 q1 有答
+        self.assertIn("q2", content)
 
     def test_no_marker_no_ledger(self):
         proc = run_hook(self.tmp, self.transcript)

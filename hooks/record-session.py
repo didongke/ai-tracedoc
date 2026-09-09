@@ -17,9 +17,10 @@ from tracedoc.extract import extract_sessions, iter_records_from  # noqa: E402
 
 
 def self_test(transcript_path):
-    """离线模式：打印将要写入的账本内容，不写任何文件。"""
-    _, records = iter_records_from(transcript_path, 0)
-    for session in extract_sessions(records):
+    """离线模式：打印将要写入的账本内容（SessionEnd 全量口径），不写任何文件。"""
+    _, records, _ = iter_records_from(transcript_path, 0)
+    sessions, _ = extract_sessions(records, complete_only=False)
+    for session in sessions:
         print(ledger.format_session_header(
             session["date"], session["title"], session["session_id"]))
         print(ledger.format_entries(session["entries"]))
@@ -41,16 +42,20 @@ def run(hook):
         known = (state.get("sessions") or {}).get(session_id)
         offset = known.get("offset", 0) if known else 0
 
-        new_offset, records = iter_records_from(transcript, offset)
-        for session in extract_sessions(records):
+        new_offset, records, ends = iter_records_from(transcript, offset)
+        # Stop 模式只消费完整问答链（未完成链等下次触发）；SessionEnd 全量冲洗
+        complete_only = hook.get("hook_event_name") != "SessionEnd"
+        sessions, consumed = extract_sessions(records, complete_only=complete_only)
+        for session in sessions:
             if not session["entries"]:
                 continue
             ledger.append_session(cwd, project, session, state)
 
-        if new_offset != offset:
+        advance = ends[consumed - 1] if consumed else offset
+        if advance != offset:
             sessions_state = state.setdefault("sessions", {})
             if session_id in sessions_state:
-                sessions_state[session_id]["offset"] = new_offset
+                sessions_state[session_id]["offset"] = advance
                 ledger.save_state(cwd, state)
 
 

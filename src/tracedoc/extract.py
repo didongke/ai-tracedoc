@@ -10,11 +10,13 @@ import json
 def iter_records_from(path, start_offset):
     """读取 path 中 start_offset 之后的 JSONL 记录。
 
-    返回 (new_offset, records)。new_offset 只推进到成功解析的记录之后；
-    末尾无换行且解析失败的残行不推进，待下次写入补全后再解析。
-    中间损坏的完整行跳过并推进，避免永久卡住。
+    返回 (new_offset, records, ends)。ends[i] 为 records[i] 所在行结束后
+    的字节偏移（供调用方按"已消费记录数"推进偏移）。
+    new_offset 只推进到成功解析的记录之后；末尾无换行且解析失败的残行
+    不推进，待下次写入补全后再解析。中间损坏的完整行跳过并推进。
     """
     records = []
+    ends = []
     offset = start_offset
     with open(path, "rb") as fh:
         fh.seek(start_offset)
@@ -22,12 +24,13 @@ def iter_records_from(path, start_offset):
             try:
                 records.append(json.loads(raw.decode("utf-8")))
                 offset += len(raw)
+                ends.append(offset)
             except (ValueError, UnicodeDecodeError):
                 if raw.endswith(b"\n"):
                     offset += len(raw)   # 完整的坏行：跳过并推进
                     continue
                 break                     # 末尾残行：不推进
-    return offset, records
+    return offset, records, ends
 
 
 def _is_sidechain(record):
@@ -87,31 +90,42 @@ def _today():
     return datetime.date.today().strftime("%Y-%m-%d")
 
 
-def extract_sessions(records, tz=None):
+def extract_sessions(records, tz=None, complete_only=True):
     """把记录流按 sessionId 分组为会话问答。
 
-    返回 [{"session_id","title","date","entries":[{"q","a","t"}]}]，按出现顺序。
-    a 为 None 表示该提问没有文字总结；t 为该提问的本地时间
-    （%Y-%m-%d %H:%M，tz 供测试注入，默认系统本地时区），缺失为空串。
+    返回 (sessions, consumed_count)。
+    - sessions: [{"session_id","title","date","entries":[{"q","a","t"}]}]，
+      按出现顺序；a 为 None 表示该提问没有文字总结；t 为该提问的本地时间
+      （%Y-%m-%d %H:%M，tz 供测试注入，默认系统本地时区），缺失为空串。
+    - consumed_count: 已完整消费的记录数，供调用方推进偏移。
+
+    链完整性规则：被下一条人类提问闭合的链立即入账；末尾链只有在最后一
+    条 assistant 记录含 text 时才完整。complete_only=True（Stop 模式）时，
+    末尾未完成链不提取也不消费，等下次触发再处理；False（SessionEnd 模式）
+    时按"记问不记答"入账并全部消费。
     """
     session_map = {}
     titles = {}
     dates = {}
-    pending = None          # {"session_id","q","a","t"}
-    last_assistant = None   # 当前提问之后出现的最后一条 assistant 记录
+    chains = []              # 已完结的链：{"sid","q","a","t"}
+    pending = None           # 当前链：{"sid","q","a","t"}
+    last_assistant = None    # 当前链最后一条 assistant 记录
+    consumed = 0
 
-    def flush():
+    def close_chain():
         if pending is None:
             return
         if last_assistant is not None:
             pending["a"] = _text_of(last_assistant)
-        sid = pending["session_id"]
+        chains.append(pending)
         bucket = session_map.setdefault(
-            sid, {"session_id": sid, "title": "", "date": "", "entries": []})
+            pending["sid"],
+            {"session_id": pending["sid"], "title": "", "date": "",
+             "entries": []})
         bucket["entries"].append(
             {"q": pending["q"], "a": pending["a"], "t": pending["t"]})
 
-    for record in records:
+    for index, record in enumerate(records):
         kind = record.get("type")
         sid = record.get("sessionId")
         if kind == "ai-title":
@@ -119,17 +133,25 @@ def extract_sessions(records, tz=None):
             if title and sid:
                 titles[sid] = title
         elif (kind == "assistant" and not _is_sidechain(record)
-              and pending is not None and sid == pending["session_id"]):
+              and pending is not None and sid == pending["sid"]):
             last_assistant = record
         elif is_human_question(record):
-            flush()
+            if pending is not None:      # 新提问闭合上一链（无论有无 text）
+                close_chain()
+                consumed = index
             if sid:
                 dates.setdefault(sid, (record.get("timestamp") or "")[:10])
-            pending = {"session_id": sid,
+            pending = {"sid": sid,
                        "q": record["message"]["content"], "a": None,
                        "t": _format_local_time(record.get("timestamp"), tz)}
             last_assistant = None
-    flush()
+
+    if pending is not None:              # 末尾链
+        last_has_text = (last_assistant is not None
+                         and _text_of(last_assistant) is not None)
+        if last_has_text or not complete_only:
+            close_chain()
+            consumed = len(records)
 
     sessions = []
     for sid in session_map:
@@ -138,4 +160,4 @@ def extract_sessions(records, tz=None):
         first_t = session["entries"][0]["t"]
         session["date"] = first_t[:10] or dates.get(sid) or _today()
         sessions.append(session)
-    return sessions
+    return sessions, consumed
