@@ -1,0 +1,17 @@
+{
+  "description": "ai-tracedoc - 开发过程自动记录",
+  "hooks": {
+    "SessionEnd": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/record-session.py\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
