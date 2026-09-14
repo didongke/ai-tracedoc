@@ -4,5 +4,6 @@
   "description": "Records Claude Code development conversations into a per-project TraceDoc ledger: your questions and the AI's final answers, faithfully and without inference.",
   "author": {
     "name": "ddk"
-  }
+  },
+  "license": "MIT"
 }

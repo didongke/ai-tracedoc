@@ -21,6 +21,7 @@ no inference and no summarization.
 ## Requirements
 
 - Claude Code — tested on 2.1.260, **Linux only**
+- Python 3.7+ (stdlib only, no third-party dependencies)
 - macOS is expected to work (POSIX `fcntl`) but has not been tested
 - Windows is not supported
 
@@ -85,6 +86,27 @@ Commit selected files only if you intend to share them.
 - Ledger content is verbatim excerpts of AI answers and may contain code or
   secrets — review before sharing
 - The plugin does not read or record environment variables
+- Recording relies on Claude Code's internal transcript format, which is
+  not a public API — after a Claude Code upgrade, verify with `--self-test`
+  (see Development) if entries stop appearing
+
+## Development
+
+Run the test suite:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+Verify the extraction pipeline against a real transcript without touching
+any ledger:
+
+```bash
+python3 hooks/record-session.py --self-test ~/.claude/projects/<project-slug>/<session-id>.jsonl
+```
+
+The core layer (`src/tracedoc/`) is agent-agnostic; only
+`hooks/` is Claude Code specific.
 
 ## Roadmap
 

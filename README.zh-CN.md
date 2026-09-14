@@ -18,6 +18,7 @@ AI 的最终回答——忠实记录，不推断、不提炼。
 ## 环境要求
 
 - Claude Code——仅在 **Linux** 上实测（2.1.260）
+- Python 3.7+（纯标准库，无第三方依赖）
 - macOS 理论兼容（POSIX `fcntl`），未实测
 - Windows 不支持
 
@@ -77,6 +78,24 @@ touch .tracedoc-on
 - headless（`claude -p`）会话同样逐轮入账（Stop hook 触发）
 - 账本内容是 AI 回答的原文摘录，可能包含代码片段或临时密钥，分享前请检查
 - 插件不读取、不记录任何环境变量
+- 记录依赖 Claude Code 的内部转录格式（非公开 API）——Claude Code
+  升级后若发现不再入账，请用 `--self-test` 自检（见 Development）
+
+## Development
+
+运行测试：
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+对真实转录离线验证提取管线（不写任何账本）：
+
+```bash
+python3 hooks/record-session.py --self-test ~/.claude/projects/<项目slug>/<会话ID>.jsonl
+```
+
+核心层（`src/tracedoc/`）与 agent 无关；仅 `hooks/` 为 Claude Code 专用。
 
 ## 规划
 
