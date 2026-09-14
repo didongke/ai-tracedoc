@@ -1,4 +1,6 @@
-"""适配器端到端测试：通过子进程以 hook 身份调用 record-session.py。"""
+"""Adapter end-to-end tests: invoke record-session.py via subprocess as the
+hook would. Chinese fixture content simulates real users and verifies that
+content is recorded verbatim."""
 import datetime
 import json
 import os
@@ -64,9 +66,10 @@ class AdapterTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.transcript = os.path.join(self.tmp, "session.jsonl")
-        # ai-title 先行：真实转录常带会话标题。缺省时标题回退为首个提问，
-        # 会把 "怎么设计缓存？" 写进会话头，导致 test_hook_continues_new_records_only
-        # 的 count(...) == 1 断言永远失败（标题行 + 正文行 = 2），见报告。
+        # An ai-title record first, as real transcripts carry one. Without
+        # it the fallback title (the first question) would make
+        # test_hook_continues_new_records_only's count(...) == 1 assertion
+        # unsatisfiable (header line + body line = 2).
         write_transcript(self.transcript, [
             {"type": "ai-title", "aiTitle": "缓存设计讨论", "sessionId": "s1"},
             human("怎么设计缓存？"),
@@ -78,7 +81,7 @@ class AdapterTest(unittest.TestCase):
     def expected_ledger_name(self):
         today = datetime.date.today().strftime("%Y%m%d")
         project = os.path.basename(self.tmp)
-        return "%s-%s-%s" % (today, project, "开发过程.md")
+        return "%s-%s-%s" % (today, project, "tracedoc.md")
 
     def ledger_content(self):
         path = os.path.join(self.tmp, self.expected_ledger_name())
@@ -93,7 +96,7 @@ class TestSelfTest(AdapterTest):
         self.assertIn("怎么设计缓存？", proc.stdout)
         self.assertIn("建议用 LRU。", proc.stdout)
         self.assertIn("为什么不用 LFU？", proc.stdout)
-        self.assertNotIn("Read", proc.stdout)   # 工具调用不进账
+        self.assertNotIn("Read", proc.stdout)   # tool calls are not recorded
         self.assertFalse(os.path.exists(
             os.path.join(self.tmp, self.expected_ledger_name())))
 
@@ -114,7 +117,7 @@ class TestHookRun(AdapterTest):
         content = self.ledger_content()
         self.assertIn("怎么设计缓存？", content)
         self.assertIn("建议用 LRU。", content)
-        # 以工具调用收尾的提问：只记问、无答行
+        # the question that ends in a tool call is recorded question-only
         self.assertIn("为什么不用 LFU？", content)
 
     def test_hook_runs_twice_no_duplicate(self):
@@ -136,7 +139,8 @@ class TestHookRun(AdapterTest):
         self.assertEqual(content.count("怎么设计缓存？"), 1)
 
     def test_stop_hook_incomplete_chain_deferred(self):
-        """Stop 模式：末链以工具调用收尾 → 不入账、偏移不推进；链完成后补入且不重复。"""
+        """Stop mode: a trailing chain ending in a tool call is deferred;
+        once completed it is appended exactly once."""
         self.enable_marker()
         with open(self.transcript, "w", encoding="utf-8") as fh:
             fh.write(dumps(human("q1")) + "\n")
@@ -147,19 +151,21 @@ class TestHookRun(AdapterTest):
         content = self.ledger_content()
         self.assertIn("q1", content)
         self.assertIn("a1", content)
-        self.assertNotIn("q2", content)   # 未完成链不入账
-        # 第二段：q2 的回答完成（同一转录继续追加）
+        self.assertNotIn("q2", content)   # incomplete chain not recorded yet
+        # second run: q2's answer has arrived (same transcript, appended)
         with open(self.transcript, "a", encoding="utf-8") as fh:
             fh.write(dumps(assistant("a2")) + "\n")
         run_hook(self.tmp, self.transcript, hook_event_name="Stop")
         content = self.ledger_content()
         self.assertIn("q2", content)
         self.assertIn("a2", content)
-        # 条目带时间前缀；会话头回退标题也含 q1，故数条目标记数
-        self.assertEqual(content.count("**问：** "), 2)   # q1+q2 各一条，无重复
+        # entries carry a time prefix; count entry markers (the fallback
+        # session title also contains q1)
+        self.assertEqual(content.count("**Question:** "), 2)   # q1+q2, no dupes
 
     def test_sessionend_records_incomplete_chain_question_only(self):
-        """SessionEnd 模式：末链以工具调用收尾 → 记问不记答，全部消费。"""
+        """SessionEnd mode: a trailing chain ending in a tool call is
+        recorded question-only and fully consumed."""
         self.enable_marker()
         with open(self.transcript, "w", encoding="utf-8") as fh:
             fh.write(dumps(human("q1")) + "\n")
@@ -168,8 +174,8 @@ class TestHookRun(AdapterTest):
             fh.write(dumps(tool_use("Edit")) + "\n")
         run_hook(self.tmp, self.transcript, hook_event_name="SessionEnd")
         content = self.ledger_content()
-        self.assertEqual(content.count("**问：**"), 2)
-        self.assertEqual(content.count("**答：**"), 1)   # 只有 q1 有答
+        self.assertEqual(content.count("**Question:**"), 2)
+        self.assertEqual(content.count("**Answer:**"), 1)   # only q1 answered
         self.assertIn("q2", content)
 
     def test_no_marker_no_ledger(self):
@@ -180,8 +186,9 @@ class TestHookRun(AdapterTest):
 
     def test_bad_stdin_exits_zero(self):
         self.enable_marker()
-        # universal_newlines=True：与 run_hook 一致（文本模式才能送 str 输入，
-        # 否则 Python 3.7 的 subprocess 在 _communicate 直接抛 TypeError，见报告）
+        # universal_newlines=True, matching run_hook: text mode is required
+        # to send a str on stdin, otherwise Python 3.7's subprocess raises
+        # TypeError in _communicate (see the task report)
         proc = subprocess.run(
             [sys.executable, SCRIPT], input="not-json",
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,

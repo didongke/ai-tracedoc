@@ -1,4 +1,9 @@
-"""转录解析与提取规则的单元测试（设计文档 §4.3）。"""
+"""Unit tests for transcript parsing and extraction rules (design doc §4.3).
+
+Some fixtures deliberately use Chinese content: it simulates real users'
+questions and exercises UTF-8 multibyte byte-offset handling. Content is
+recorded verbatim in whatever language it was written.
+"""
 import json
 import os
 import sys
@@ -7,7 +12,7 @@ import unittest
 from datetime import timedelta, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, "..", "src"))  # 让 tests.test_extract 从仓库根目录可运行
+sys.path.insert(0, os.path.join(HERE, "..", "src"))  # runnable from repo root
 
 import tracedoc.extract as extract
 from tracedoc.extract import extract_sessions, is_human_question, iter_records_from
@@ -81,7 +86,7 @@ class TestIterRecordsFrom(unittest.TestCase):
         offset, records, ends = iter_records_from(self.path, 0)
         self.assertEqual(len(records), 1)
         self.assertEqual(offset, os.path.getsize(self.path))
-        self.assertEqual(ends[0], offset)   # 坏行无 ends 记录，好行结束即文件尾
+        self.assertEqual(ends[0], offset)   # corrupt lines get no ends entry
 
     def test_start_offset_skips_already_read(self):
         content = join(human("q1"), human("q2"))
@@ -95,7 +100,7 @@ class TestIterRecordsFrom(unittest.TestCase):
 
 class TestIsHumanQuestion(unittest.TestCase):
     def test_typed_human_question(self):
-        self.assertTrue(is_human_question(human("你好")))
+        self.assertTrue(is_human_question(human("你好")))   # multibyte content
 
     def test_tool_result_is_not_human(self):
         self.assertFalse(is_human_question(tool_result_user()))
@@ -137,6 +142,7 @@ class TestFormatLocalTime(unittest.TestCase):
 
 class TestExtractSessions(unittest.TestCase):
     def test_basic_qa(self):
+        # Chinese content: recorded verbatim, byte offsets must stay correct
         records = [human("怎么设计缓存？"),
                    assistant([{"type": "thinking", "thinking": "内部思考"},
                               text_block("建议用 LRU。")])]
@@ -150,17 +156,18 @@ class TestExtractSessions(unittest.TestCase):
 
     def test_answer_takes_last_assistant_only(self):
         records = [human("q"),
-                   assistant([text_block("我先看看。"), tool_use_block("Read")]),
+                   assistant([text_block("Let me check first."), tool_use_block("Read")]),
                    tool_result_user(),
-                   assistant([text_block("最终结论在这里。")])]
+                   assistant([text_block("Final answer here.")])]
         sessions, consumed = extract_sessions(records, tz=TZ8)
-        self.assertEqual(sessions[0]["entries"][0]["a"], "最终结论在这里。")
+        self.assertEqual(sessions[0]["entries"][0]["a"], "Final answer here.")
         self.assertEqual(consumed, len(records))
 
     def test_answer_empty_when_ends_with_tool_use(self):
-        """SessionEnd 模式（complete_only=False）：以工具调用收尾的链记问不记答，全部消费。"""
+        """SessionEnd mode (complete_only=False): a chain ending in a tool
+        call is recorded question-only and fully consumed."""
         records = [human("q"),
-                   assistant([text_block("我先看看。"), tool_use_block("Read")]),
+                   assistant([text_block("Let me check first."), tool_use_block("Read")]),
                    tool_result_user(),
                    assistant([tool_use_block("Edit")])]
         sessions, consumed = extract_sessions(records, tz=TZ8, complete_only=False)
@@ -169,13 +176,14 @@ class TestExtractSessions(unittest.TestCase):
 
     def test_multiple_text_blocks_joined(self):
         records = [human("q"),
-                   assistant([text_block("第一段。"), text_block("第二段。")])]
+                   assistant([text_block("Part one."), text_block("Part two.")])]
         sessions, consumed = extract_sessions(records, tz=TZ8)
-        self.assertEqual(sessions[0]["entries"][0]["a"], "第一段。\n\n第二段。")
+        self.assertEqual(sessions[0]["entries"][0]["a"], "Part one.\n\nPart two.")
         self.assertEqual(consumed, len(records))
 
     def test_consecutive_questions_each_get_entry(self):
-        """被新提问闭合的链立即入账；SessionEnd 模式下末链无回复也入账（答留空）。"""
+        """A chain closed by the next question is recorded immediately; in
+        SessionEnd mode a trailing unanswered question is also recorded."""
         records = [human("q1"),
                    assistant([text_block("a1")]),
                    human("q2")]
@@ -186,7 +194,7 @@ class TestExtractSessions(unittest.TestCase):
         self.assertEqual(consumed, 3)
 
     def test_sidechain_assistant_ignored(self):
-        side = assistant([text_block("子代理的话")])
+        side = assistant([text_block("子代理的话")])   # subagent content, Chinese
         side["isSidechain"] = True
         records = [human("q"), side,
                    assistant([text_block("真正的回答。")])]
@@ -204,6 +212,7 @@ class TestExtractSessions(unittest.TestCase):
         self.assertEqual(consumed, len(records))
 
     def test_title_fallback_to_first_question(self):
+        # Multibyte truncation: 40 chars + ellipsis
         records = [human("这是一段超过四十个字符的长问题一二三四五六七八九十甲乙丙丁"),
                    assistant([text_block("a")])]
         sessions, consumed = extract_sessions(records, tz=TZ8)
@@ -220,7 +229,8 @@ class TestExtractSessions(unittest.TestCase):
         self.assertEqual(consumed, len(records))
 
     def test_session_date_follows_local_time(self):
-        """本地时间跨天时，会话头日期取本地日期（UTC 23:30 → 本地次日 07:30）。"""
+        """The session header date uses the LOCAL date, even when that
+        crosses midnight (UTC 23:30 -> next day 07:30 local)."""
         records = [human("q", ts="2026-09-06T23:30:00Z"),
                    assistant([text_block("a")])]
         sessions, consumed = extract_sessions(records, tz=TZ8)
@@ -242,14 +252,15 @@ class TestExtractSessions(unittest.TestCase):
         self.assertEqual(consumed, len(records))
 
     def test_incomplete_final_chain_excluded_by_default(self):
-        """Stop 模式默认：末链以工具调用收尾 → 不提取、不消费。"""
+        """Stop mode default: a trailing chain ending in a tool call is
+        neither extracted nor consumed."""
         records = [human("q1"),
                    assistant([text_block("a1")]),
                    human("q2"),
                    assistant([tool_use_block("Edit")])]
         sessions, consumed = extract_sessions(records, tz=TZ8)
         self.assertEqual([e["q"] for e in sessions[0]["entries"]], ["q1"])
-        self.assertEqual(consumed, 2)   # q1 链（前 2 条记录）已消费
+        self.assertEqual(consumed, 2)   # q1's chain (first 2 records) consumed
 
     def test_question_without_assistant_excluded_by_default(self):
         records = [human("q")]
@@ -258,7 +269,8 @@ class TestExtractSessions(unittest.TestCase):
         self.assertEqual(consumed, 0)
 
     def test_complete_only_false_consumes_question_only(self):
-        """SessionEnd 模式：无 AI 回复的提问也入账（答留空），全部消费。"""
+        """SessionEnd mode: a question with no reply is recorded
+        question-only and fully consumed."""
         records = [human("q")]
         sessions, consumed = extract_sessions(records, tz=TZ8, complete_only=False)
         self.assertEqual(sessions[0]["entries"][0]["q"], "q")

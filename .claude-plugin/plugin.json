@@ -1,7 +1,7 @@
 {
   "name": "ai-tracedoc",
-  "version": "0.1.0",
-  "description": "自动记录 Claude Code 开发决策过程：会话结束提取问答，追加到项目根目录开发过程账本",
+  "version": "0.2.0",
+  "description": "Records Claude Code development conversations into a per-project TraceDoc ledger: your questions and the AI's final answers, faithfully and without inference.",
   "author": {
     "name": "ddk"
   }

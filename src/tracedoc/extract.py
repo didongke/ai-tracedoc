@@ -1,19 +1,24 @@
-"""转录解析与问答提取（核心层，跨 agent 通用，无 Claude Code 特定概念）。
+"""Transcript parsing and Q&A extraction (core layer, agent-agnostic —
+no Claude Code-specific concepts beyond the transcript record shape).
 
-提取规则见设计文档 §4.3：人类提问原文照录；答取该提问之后
-最后一条 assistant 记录的 text 块；无 text（以工具调用收尾）则答留空。
+Extraction rules follow design doc §4.3: human questions are recorded
+verbatim; the answer is the text blocks of the last assistant record in
+the question's chain. Conversation CONTENT is kept exactly as written,
+in whatever language it was written.
 """
 import datetime
 import json
 
 
 def iter_records_from(path, start_offset):
-    """读取 path 中 start_offset 之后的 JSONL 记录。
+    """Read the JSONL records of path after start_offset.
 
-    返回 (new_offset, records, ends)。ends[i] 为 records[i] 所在行结束后
-    的字节偏移（供调用方按"已消费记录数"推进偏移）。
-    new_offset 只推进到成功解析的记录之后；末尾无换行且解析失败的残行
-    不推进，待下次写入补全后再解析。中间损坏的完整行跳过并推进。
+    Returns (new_offset, records, ends). ends[i] is the byte offset after
+    the line holding records[i], so callers can advance the offset by
+    "consumed record count". new_offset advances only past successfully
+    parsed lines; an unterminated trailing line that fails to parse is
+    not advanced (it will be re-read once completed). Corrupt complete
+    lines are skipped and advanced, so they never wedge the pipeline.
     """
     records = []
     ends = []
@@ -27,9 +32,9 @@ def iter_records_from(path, start_offset):
                 ends.append(offset)
             except (ValueError, UnicodeDecodeError):
                 if raw.endswith(b"\n"):
-                    offset += len(raw)   # 完整的坏行：跳过并推进
+                    offset += len(raw)   # corrupt complete line: skip it
                     continue
-                break                     # 末尾残行：不推进
+                break                     # trailing partial line: leave it
     return offset, records, ends
 
 
@@ -38,7 +43,8 @@ def _is_sidechain(record):
 
 
 def is_human_question(record):
-    """判定记录是否为人类输入的文本提问（设计文档 §4.3 判定条件）。"""
+    """True when the record is a typed human message (design doc §4.3
+    predicate)."""
     if record.get("type") != "user":
         return False
     if _is_sidechain(record):
@@ -67,10 +73,16 @@ def _fallback_title(entries):
     return first
 
 
-def _format_local_time(timestamp, tz=None):
-    """把转录的 UTC 时间戳转成本地时间，格式 %Y-%m-%d %H:%M。
+def _today():
+    return datetime.date.today().strftime("%Y-%m-%d")
 
-    tz 供测试注入；默认系统本地时区。缺失或无法解析返回空串。
+
+def _format_local_time(timestamp, tz=None):
+    """Convert a transcript UTC timestamp to local time, formatted
+    %Y-%m-%d %H:%M.
+
+    tz is injectable for tests; defaults to the system's local timezone.
+    Returns "" for missing or unparseable timestamps.
     """
     if not timestamp:
         return ""
@@ -86,30 +98,30 @@ def _format_local_time(timestamp, tz=None):
     return parsed.strftime("%Y-%m-%d %H:%M")
 
 
-def _today():
-    return datetime.date.today().strftime("%Y-%m-%d")
-
-
 def extract_sessions(records, tz=None, complete_only=True):
-    """把记录流按 sessionId 分组为会话问答。
+    """Group a record stream into per-session Q&A.
 
-    返回 (sessions, consumed_count)。
-    - sessions: [{"session_id","title","date","entries":[{"q","a","t"}]}]，
-      按出现顺序；a 为 None 表示该提问没有文字总结；t 为该提问的本地时间
-      （%Y-%m-%d %H:%M，tz 供测试注入，默认系统本地时区），缺失为空串。
-    - consumed_count: 已完整消费的记录数，供调用方推进偏移。
+    Returns (sessions, consumed_count).
+    - sessions: [{"session_id","title","date","entries":[{"q","a","t"}]}]
+      in order of appearance; a is None when the question got no text
+      answer; t is the question's local time (%Y-%m-%d %H:%M), "" when
+      the timestamp is missing.
+    - consumed_count: number of records fully consumed — callers advance
+      the offset by exactly this many records.
 
-    链完整性规则：被下一条人类提问闭合的链立即入账；末尾链只有在最后一
-    条 assistant 记录含 text 时才完整。complete_only=True（Stop 模式）时，
-    末尾未完成链不提取也不消费，等下次触发再处理；False（SessionEnd 模式）
-    时按"记问不记答"入账并全部消费。
+    Chain-completeness rule: a chain closed by the next human question is
+    recorded immediately; the trailing chain is complete only when its
+    last assistant record carries text. With complete_only=True (Stop
+    mode) an incomplete trailing chain is neither extracted nor consumed
+    — it waits for the next trigger. With complete_only=False (SessionEnd
+    mode) it is recorded question-only and fully consumed.
     """
     session_map = {}
     titles = {}
     dates = {}
-    chains = []              # 已完结的链：{"sid","q","a","t"}
-    pending = None           # 当前链：{"sid","q","a","t"}
-    last_assistant = None    # 当前链最后一条 assistant 记录
+    chains = []              # closed chains: {"sid","q","a","t"}
+    pending = None           # current chain: {"sid","q","a","t"}
+    last_assistant = None    # last assistant record of the current chain
     consumed = 0
 
     def close_chain():
@@ -136,7 +148,7 @@ def extract_sessions(records, tz=None, complete_only=True):
               and pending is not None and sid == pending["sid"]):
             last_assistant = record
         elif is_human_question(record):
-            if pending is not None:      # 新提问闭合上一链（无论有无 text）
+            if pending is not None:      # new question closes the previous chain
                 close_chain()
                 consumed = index
             if sid:
@@ -146,7 +158,7 @@ def extract_sessions(records, tz=None, complete_only=True):
                        "t": _format_local_time(record.get("timestamp"), tz)}
             last_assistant = None
 
-    if pending is not None:              # 末尾链
+    if pending is not None:              # trailing chain
         last_has_text = (last_assistant is not None
                          and _text_of(last_assistant) is not None)
         if last_has_text or not complete_only:

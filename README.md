@@ -1,64 +1,92 @@
 # ai-tracedoc
 
-自动记录 Claude Code 开发决策过程：问答逐轮提取"你的提问 + AI 最后总结"，
-追加进项目根目录的开发过程账本。忠实记录，不推断、不提炼。
+Automatically records Claude Code development conversations into a per-project
+TraceDoc ledger: your questions and the AI's final answers — faithfully, with
+no inference and no summarization.
 
-## 原理
+[中文说明](README.zh-CN.md)
 
-- Stop hook（每轮 AI 回答完成后）+ SessionEnd hook（会话结束冲洗）
-  → hooks/record-session.py → 解析会话转录（JSONL）
-- 入账内容：你的每句话原文 + AI 每个回答的最后文字总结
-- 不入账：思考过程、工具调用、中间输出、子代理对话
-- 未完成的问答链（AI 正以工具调用收尾）暂不入账，等回答完成后补入
-- 原始转录仍留在 `~/.claude/projects/`，本插件不复制、不上传
+## How it works
 
-## 安装（每台机器一次）
+- Stop hook (after every AI response) + SessionEnd hook (flush at session end)
+  → hooks/record-session.py → parses the session transcript (JSONL)
+- Recorded: every question you typed, verbatim, plus the AI's final text
+  answer for each question — in whatever language you wrote it
+- Not recorded: thinking blocks, tool calls, file contents, intermediate
+  output, subagent conversations
+- An answer still in progress (ending in a tool call) is deferred until it
+  completes
+- The raw transcript stays in `~/.claude/projects/`; this plugin copies nothing
 
-本地开发插件实测走 skills-dir 机制（`claude plugin install` 仅支持市场安装）：
+## Requirements
 
-    mkdir -p ~/.claude/skills/ai-tracedoc
-    cp -r .claude-plugin hooks src ~/.claude/skills/ai-tracedoc/
+- Claude Code — tested on 2.1.260, **Linux only**
+- macOS is expected to work (POSIX `fcntl`) but has not been tested
+- Windows is not supported
 
-复制后自动加载，无需手动启用。确认：
+## Install (once per machine)
 
-    claude plugin list                  # 期望出现 ai-tracedoc@skills-dir，Status ✔ loaded
-    claude plugin details ai-tracedoc   # Hooks (2) SessionEnd, Stop
+```bash
+mkdir -p ~/.claude/skills/ai-tracedoc
+cp -r .claude-plugin hooks src ~/.claude/skills/ai-tracedoc/
+```
 
-（若显示未启用，执行 `claude plugin enable ai-tracedoc`。）
+Loaded automatically; verify:
 
-## 启用记录（每个项目一次）
+```bash
+claude plugin list                  # expect ai-tracedoc@skills-dir, Status ✔ loaded
+claude plugin details ai-tracedoc   # Hooks (2) SessionEnd, Stop
+```
 
-    touch .tracedoc-on
+## Enable recording (once per project)
 
-之后该项目的问答**逐轮实时入账**（AI 回答完成后即记录），会话结束时冲洗收尾，
-无需任何操作。两层开关都打开前不产生任何文件。
+```bash
+touch .tracedoc-on
+```
 
-## 账本
+Questions are recorded as they happen (after each AI answer), with a final
+flush at session end. Nothing is written until both switches are on.
 
-- 位置：项目根目录，一本持续追加
-- 命名：`<创建日期YYYYMMDD>-<项目目录名>-开发过程.md`，如
-  `20260906-20260905-ai-tracedoc-开发过程.md`
-- 超过 200 KB 自动分卷：续卷名为 `...-开发过程-02.md`、`-03.md`…，
-  卷间有"上接/下接"标注；一个会话绝不跨卷
+## The ledger
 
-## 建议的 .gitignore
+- Location: project root, one growing file per project
+- Naming: `<YYYYMMDD>-<project-dir>-tracedoc.md`, e.g.
+  `20260906-my-project-tracedoc.md`
+- Past 200 KB, new volumes continue as `...-tracedoc-02.md`, `-03.md`, …
+  with "Continued in / Continued from" links; a session never splits
+  across volumes
+- Entry format:
 
-    *开发过程.md
-    .tracedoc-state.json
-    .tracedoc.lock
+```markdown
+## 2026-09-06 · Session title
 
-账本默认不入库（可能含敏感问答）。分享时按需 `git add` 对应账本文件。
+**Question:** 2026-09-06 14:32 · Why was this designed this way?
+**Answer:** …the AI's final answer, verbatim…
+```
 
-## 注意事项
+## Suggested .gitignore
 
-- 问答在会话进行中就已入账，退出方式（`/exit`、Ctrl+D、终端关闭、进程强杀）
-  都不影响已完成内容的记录；仅"AI 尚未回答完的最后一个提问"可能未入账
-- headless（`claude -p`）会话同样逐轮入账（Stop hook 触发）
-- 账本内容是 AI 回答的原文摘录，可能包含代码片段或临时密钥，分享前请检查
-- 插件不读取、不记录任何环境变量
-- 支持 Linux / macOS；Windows 暂不支持
+```gitignore
+*tracedoc.md
+.tracedoc-state.json
+.tracedoc.lock
+```
 
-## 规划
+The ledger is not committed by default (it may contain sensitive Q&A).
+Commit selected files only if you intend to share them.
 
-- P2：分析 skill（读账本 + 代码，回答"这里当初为什么这么决定"）
-- 其他 agent（Codex 等）：核心层已按跨 agent 设计，待适配
+## Notes
+
+- Entries are written during the session, so the exit method (`/exit`,
+  Ctrl+D, closing the terminal, killing the process) does not affect what
+  has already been recorded; at most the very last unanswered question may
+  be missing
+- Headless sessions (`claude -p`) are recorded too (the Stop hook fires there)
+- Ledger content is verbatim excerpts of AI answers and may contain code or
+  secrets — review before sharing
+- The plugin does not read or record environment variables
+
+## Roadmap
+
+- Analysis skill: read ledger + code, answer "why was this decided this way"
+- Other agents (Codex, …): the core layer is agent-agnostic, adapters TBD

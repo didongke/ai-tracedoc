@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""ai-tracedoc Claude Code 适配层：SessionEnd hook 入口。
+"""ai-tracedoc Claude Code adapter: SessionEnd / Stop hook entry point.
 
-stdin 接收 hook JSON（session_id/transcript_path/cwd/...）；
-守卫 .tracedoc-on 标记，增量解析转录，追加进项目根目录开发过程账本。
-一切异常不阻塞会话结束：恒 exit 0，诊断只写 stderr（设计文档 §4.3）。
+Reads the hook JSON from stdin (session_id / transcript_path / cwd / ...),
+guards on the .tracedoc-on marker, incrementally parses the transcript and
+appends Q&A entries to the project's TraceDoc ledger. Never blocks the
+session: every failure exits 0 with diagnostics on stderr only
+(design doc §4.3).
 """
 import json
 import os
@@ -17,7 +19,8 @@ from tracedoc.extract import extract_sessions, iter_records_from  # noqa: E402
 
 
 def self_test(transcript_path):
-    """离线模式：打印将要写入的账本内容（SessionEnd 全量口径），不写任何文件。"""
+    """Offline mode: print what would be written (SessionEnd full-flush
+    semantics), without writing any file."""
     _, records, _ = iter_records_from(transcript_path, 0)
     sessions, _ = extract_sessions(records, complete_only=False)
     for session in sessions:
@@ -37,13 +40,15 @@ def run(hook):
 
     project = os.path.basename(os.path.normpath(cwd))
     with ledger.project_lock(cwd):
-        # 临界区：读状态 → 追加账本 → 写状态（设计文档 §3 原子追加）
+        # Critical section: read state -> append ledger -> save state
+        # (design doc §3).
         state = ledger.load_state(cwd)
         known = (state.get("sessions") or {}).get(session_id)
         offset = known.get("offset", 0) if known else 0
 
         new_offset, records, ends = iter_records_from(transcript, offset)
-        # Stop 模式只消费完整问答链（未完成链等下次触发）；SessionEnd 全量冲洗
+        # Stop mode consumes complete chains only (incomplete chains wait
+        # for the next trigger); SessionEnd flushes everything.
         complete_only = hook.get("hook_event_name") != "SessionEnd"
         sessions, consumed = extract_sessions(records, complete_only=complete_only)
         for session in sessions:
@@ -63,13 +68,13 @@ def main(argv):
     if "--self-test" in argv:
         index = argv.index("--self-test")
         if index + 1 >= len(argv):
-            print("用法: --self-test <转录文件.jsonl>", file=sys.stderr)
+            print("usage: --self-test <transcript.jsonl>", file=sys.stderr)
             return 1
         self_test(argv[index + 1])
         return 0
     try:
         run(json.loads(sys.stdin.read() or "{}"))
-    except Exception as exc:      # noqa: BLE001 —— 绝不阻塞会话结束
+    except Exception as exc:      # noqa: BLE001 — never block session end
         print("ai-tracedoc: %s" % exc, file=sys.stderr)
     return 0
 

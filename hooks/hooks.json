@@ -1,5 +1,5 @@
 {
-  "description": "ai-tracedoc - 开发过程自动记录",
+  "description": "ai-tracedoc - automatic development conversation recording",
   "hooks": {
     "SessionEnd": [
       {

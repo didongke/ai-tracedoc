@@ -1,4 +1,5 @@
-"""插件骨架验证：清单与 hooks 配置可解析且字段齐全。"""
+"""Plugin skeleton validation: the manifest and hooks config parse and
+carry all required fields."""
 import json
 import os
 import unittest
@@ -12,8 +13,8 @@ class TestPluginFiles(unittest.TestCase):
         with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
         self.assertEqual(data["name"], "ai-tracedoc")
-        self.assertEqual(data["version"], "0.1.0")
-        self.assertIn("开发过程", data["description"])
+        self.assertEqual(data["version"], "0.2.0")
+        self.assertIn("development", data["description"])
         self.assertEqual(data["author"], {"name": "ddk"})
 
     def test_hooks_json_valid(self):
