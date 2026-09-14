@@ -27,15 +27,26 @@ no inference and no summarization.
 
 ## Install (once per machine)
 
+Via the plugin marketplace (recommended):
+
 ```bash
+claude plugin marketplace add didongke/ai-tracedoc
+claude plugin install ai-tracedoc@ai-tracedoc
+```
+
+Or manually:
+
+```bash
+git clone https://github.com/didongke/ai-tracedoc.git
+cd ai-tracedoc
 mkdir -p ~/.claude/skills/ai-tracedoc
 cp -r .claude-plugin hooks src ~/.claude/skills/ai-tracedoc/
 ```
 
-Loaded automatically; verify:
+Verify:
 
 ```bash
-claude plugin list                  # expect ai-tracedoc@skills-dir, Status ✔ loaded
+claude plugin list                  # expect ai-tracedoc, Status ✔ enabled
 claude plugin details ai-tracedoc   # Hooks (2) SessionEnd, Stop
 ```
 

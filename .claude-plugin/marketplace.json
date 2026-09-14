@@ -1,0 +1,18 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "ai-tracedoc",
+  "description": "Automatically records Claude Code development conversations into a per-project TraceDoc ledger",
+  "owner": {
+    "name": "ddk"
+  },
+  "plugins": [
+    {
+      "name": "ai-tracedoc",
+      "description": "Records Claude Code development conversations into a per-project TraceDoc ledger: your questions and the AI's final answers, faithfully and without inference.",
+      "author": {
+        "name": "ddk"
+      },
+      "source": "./"
+    }
+  ]
+}

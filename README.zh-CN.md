@@ -24,15 +24,26 @@ AI 的最终回答——忠实记录，不推断、不提炼。
 
 ## 安装（每台机器一次）
 
+通过插件市场安装（推荐）：
+
 ```bash
+claude plugin marketplace add didongke/ai-tracedoc
+claude plugin install ai-tracedoc@ai-tracedoc
+```
+
+或手动安装：
+
+```bash
+git clone https://github.com/didongke/ai-tracedoc.git
+cd ai-tracedoc
 mkdir -p ~/.claude/skills/ai-tracedoc
 cp -r .claude-plugin hooks src ~/.claude/skills/ai-tracedoc/
 ```
 
-复制后自动加载。确认：
+确认：
 
 ```bash
-claude plugin list                  # 期望出现 ai-tracedoc@skills-dir，Status ✔ loaded
+claude plugin list                  # 期望出现 ai-tracedoc，Status ✔ enabled
 claude plugin details ai-tracedoc   # Hooks (2) SessionEnd, Stop
 ```
 
