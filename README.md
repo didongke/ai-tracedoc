@@ -121,12 +121,12 @@ The core layer (`src/tracedoc/`) is agent-agnostic; only
 
 ## Writings
 
-A four-part essay series, *The AI Thought Quartet* — published on dev.to:
+A four-part essay series, *[The AI Thought Quartet](https://dev.to/didongke/series/44232)* — published on dev.to:
 
-1. AI Is Not a Smarter Search Engine — It's a Mirror for Your Thinking
-2. Code Can Be Committed — But Who Owns the Thinking?
-3. From Recording Conversations to "Resurrecting" Thought
-4. The Reflector of Thought, the Accelerator of Civilization
+1. [AI Is Not a Smarter Search Engine — It's a Mirror for Your Thinking](https://dev.to/didongke/ai-is-not-a-smarter-search-engine-its-a-mirror-for-your-thinking-bci)
+2. [Code Can Be Committed — But Who Owns the Thinking?](https://dev.to/didongke/code-can-be-committed-but-who-owns-the-thinking-39k9)
+3. [From Recording Conversations to "Resurrecting" Thought](https://dev.to/didongke/from-recording-conversations-to-resurrecting-thought-ai-is-building-a-digital-pyramid-for-60e)
+4. [The Reflector of Thought, the Accelerator of Civilization](https://dev.to/didongke/the-reflector-of-thought-the-accelerator-of-civilization-how-ai-is-reshaping-the-evolution-of-5293)
 
 *A manifesto drafted for the future — backed by working code.*
 

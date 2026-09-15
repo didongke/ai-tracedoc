@@ -110,12 +110,12 @@ python3 hooks/record-session.py --self-test ~/.claude/projects/<项目slug>/<会
 
 ## 写作
 
-四篇系列文章《AI 思考四部曲》（发布于 dev.to）：
+四篇系列文章《[AI 思考四部曲](https://dev.to/didongke/series/44232)》（发布于 dev.to）：
 
-1. AI 不是更聪明的搜索引擎，它是你思想的镜子
-2. 代码可以提交，思考过程归谁？
-3. 从记录对话到"复活"思想
-4. 思想的反射器与文明的加速器
+1. [AI 不是更聪明的搜索引擎，它是你思想的镜子](https://dev.to/didongke/ai-is-not-a-smarter-search-engine-its-a-mirror-for-your-thinking-bci)
+2. [代码可以提交，思考过程归谁？](https://dev.to/didongke/code-can-be-committed-but-who-owns-the-thinking-39k9)
+3. [从记录对话到"复活"思想](https://dev.to/didongke/from-recording-conversations-to-resurrecting-thought-ai-is-building-a-digital-pyramid-for-60e)
+4. [思想的反射器与文明的加速器](https://dev.to/didongke/the-reflector-of-thought-the-accelerator-of-civilization-how-ai-is-reshaping-the-evolution-of-5293)
 
 *一份为未来起草的宣言——带着可运行的代码。*
 
