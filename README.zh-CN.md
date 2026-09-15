@@ -108,6 +108,17 @@ python3 hooks/record-session.py --self-test ~/.claude/projects/<项目slug>/<会
 
 核心层（`src/tracedoc/`）与 agent 无关；仅 `hooks/` 为 Claude Code 专用。
 
+## 写作
+
+四篇系列文章《AI 思考四部曲》（发布于 dev.to）：
+
+1. 代码可以提交，思考过程归谁？
+2. AI 不是更聪明的搜索引擎，它是你思想的镜子
+3. 从记录对话到"复活"思想
+4. 思想的反射器与文明的加速器
+
+*一份为未来起草的宣言——带着可运行的代码。*
+
 ## 规划
 
 - 分析 skill：读账本 + 代码，回答"这里当初为什么这么决定"

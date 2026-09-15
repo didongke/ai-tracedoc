@@ -119,6 +119,17 @@ python3 hooks/record-session.py --self-test ~/.claude/projects/<project-slug>/<s
 The core layer (`src/tracedoc/`) is agent-agnostic; only
 `hooks/` is Claude Code specific.
 
+## Writings
+
+A four-part essay series, *The AI Thought Quartet* — published on dev.to:
+
+1. Code Can Be Committed — But Who Owns the Thinking?
+2. AI Is Not a Smarter Search Engine — It's a Mirror for Your Thinking
+3. From Recording Conversations to "Resurrecting" Thought
+4. The Reflector of Thought, the Accelerator of Civilization
+
+*A manifesto drafted for the future — backed by working code.*
+
 ## Roadmap
 
 - Analysis skill: read ledger + code, answer "why was this decided this way"
