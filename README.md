@@ -123,8 +123,8 @@ The core layer (`src/tracedoc/`) is agent-agnostic; only
 
 A four-part essay series, *The AI Thought Quartet* — published on dev.to:
 
-1. Code Can Be Committed — But Who Owns the Thinking?
-2. AI Is Not a Smarter Search Engine — It's a Mirror for Your Thinking
+1. AI Is Not a Smarter Search Engine — It's a Mirror for Your Thinking
+2. Code Can Be Committed — But Who Owns the Thinking?
 3. From Recording Conversations to "Resurrecting" Thought
 4. The Reflector of Thought, the Accelerator of Civilization
 
