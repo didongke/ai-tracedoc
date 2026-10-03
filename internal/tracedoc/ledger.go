@@ -307,18 +307,6 @@ func AppendFooterLink(cwd, prevFn, nextFn string) error {
 		fmt.Sprintf("\n\n---\n\nContinued in: [%s](./%s)\n", nextFn, nextFn))
 }
 
-// ShouldStartNewVolume reports whether a volume that has reached size should
-// be closed off and a new one started.
-//
-// The other half of the rule -- that only a session arriving at a volume may
-// split it, and one already placed in a volume never does -- is not a
-// parameter here because it is not a caller's choice: AppendSession returns
-// early for a session it has already placed, so a continuation cannot reach
-// this call at all. That is what keeps a session's entries contiguous.
-func ShouldStartNewVolume(size, threshold int64) bool {
-	return size > threshold
-}
-
 // AppendSession appends one session's Q&A to the ledger, creating or rolling
 // over a volume as needed. The caller must hold ProjectLock. State is updated
 // in place, and callers should not pass a session with no entries.
@@ -344,7 +332,12 @@ func AppendSession(cwd, project string, session *Session, state *State,
 	}
 	if current != "" {
 		if info, statErr := os.Stat(filepath.Join(cwd, current)); statErr == nil {
-			if ShouldStartNewVolume(info.Size(), threshold) {
+			// Only a session arriving at a volume may split it, and only
+			// once it has grown past the threshold. A session already placed
+			// in one returned above, so a continuation never gets here --
+			// which is what keeps a session's entries contiguous, and what
+			// keeps a session from spanning volumes.
+			if info.Size() > threshold {
 				name, createErr := CreateVolume(cwd, project, today, current,
 					VolumeNumber(current)+1)
 				if createErr != nil {
