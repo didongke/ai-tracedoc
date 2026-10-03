@@ -221,28 +221,81 @@ func TestDispatcherNamesTheCauseWhenTheBinaryCannotBeExecuted(t *testing.T) {
 
 // The counterpart: a platform we ship nothing for is not a broken install,
 // and must not surface as a hook error on every session.
+//
+// The platform is faked with a stub `uname`, and the stub directory is the
+// *whole* PATH rather than an entry in front of it. That is the correction to
+// what this test used to do, and the reason is worth keeping: prefixing the
+// real PATH worked on every host it was tried on and did not work on GitHub's
+// windows-latest, where the test failed with an empty stderr on 2026-10-03.
+// An empty stderr is reachable only by the real windows/amd64 build having
+// been picked up and exiting 0, i.e. by the stub having been bypassed, and
+// which directory that shell searched first could not be reproduced from the
+// outside. So the test stopped depending on search order: with the stub
+// directory as the entire PATH there is no second `uname` anywhere to find,
+// and the two things that used to be on PATH -- `sh` for the inner command and
+// `dirname` for the dispatcher's coreutils check -- are handled by naming `sh`
+// absolutely and stubbing `dirname`.
+//
+// The dispatcher is also copied somewhere with no platform build beside it.
+// Run against the repository's own bin/, a bypassed stub does not fail: it
+// finds the real build, which succeeds, which reads as "quiet", which is the
+// pass condition. This test was silently measuring the wrong thing the moment
+// the stub lost.
 func TestDispatcherUnsupportedPlatformStaysQuiet(t *testing.T) {
 	shPath, err := exec.LookPath("sh")
 	if err != nil {
 		t.Skip("no POSIX sh on PATH")
 	}
-	// A stub `uname` claiming a platform nothing is built for, placed ahead
-	// of the real one on PATH.
-	stubDir := t.TempDir()
-	stub := "#!/bin/sh\ncase \"$1\" in -s) echo Plan9 ;; -m) echo mips ;; esac\n"
-	if err := os.WriteFile(filepath.Join(stubDir, "uname"), []byte(stub), 0o755); err != nil {
+
+	// The shipped dispatcher, with no platform binaries beside it.
+	binDir := t.TempDir()
+	dispatcher, err := os.ReadFile(filepath.Join(repoRoot, "bin", "tracedoc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(binDir, "tracedoc"), dispatcher, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
+	// The stub `uname` claiming a platform nothing is built for, and a stub
+	// `dirname` so the dispatcher's coreutils pre-check cannot fire first and
+	// answer a different question than the one being asked here.
+	stubDir := t.TempDir()
+	for name, body := range map[string]string{
+		"uname":   "#!/bin/sh\ncase \"$1\" in -s) echo Plan9 ;; -m) echo mips ;; esac\n",
+		"dirname": "#!/bin/sh\necho .\n",
+	} {
+		if err := os.WriteFile(filepath.Join(stubDir, name), []byte(body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	env := append(os.Environ(), "PATH="+stubDir)
+
+	// Probed, not assumed. A host whose sh will not take `uname` from the PATH
+	// it was handed cannot show this branch at all, and saying so beats
+	// asserting something the host cannot produce -- including when the reason
+	// is a stub that needs an interpreter the host does not have at /bin/sh.
+	probe := exec.Command(shPath, "-c", "uname -s")
+	probe.Env = env
+	out, probeErr := probe.Output()
+	if got := strings.TrimSpace(string(out)); probeErr != nil || got != "Plan9" {
+		t.Skipf("this host's sh does not take `uname` from its PATH (got %q, %v), "+
+			"so the unsupported-platform branch cannot be shown here", got, probeErr)
+	}
+
+	// The inner command names `sh` absolutely: PATH is the stub directory, so
+	// a bare `sh` would not be found. Forward slashes because the path is
+	// going into a shell, and a backslash is an escape character there.
 	script := filepath.Join(t.TempDir(), "cmd.sh")
-	command := "sh \"" + filepath.Join(repoRoot, "bin", "tracedoc") + "\"\n"
+	command := "\"" + filepath.ToSlash(shPath) + "\" \"" +
+		filepath.ToSlash(filepath.Join(binDir, "tracedoc")) + "\"\n"
 	if err := os.WriteFile(script, []byte(command), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	cmd := exec.Command(shPath, script)
 	cmd.Stdin = strings.NewReader("{}")
-	cmd.Env = append(os.Environ(), "PATH="+stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	cmd.Env = env
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {

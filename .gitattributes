@@ -1,17 +1,19 @@
 # Line endings are pinned to LF, and this file is the only thing that decides.
 #
 # The machine this was written on has core.autocrlf=true, so without this file
-# a checkout rewrites the working tree to CRLF. Two tracked files cannot
-# survive that:
+# a checkout rewrites the working tree to CRLF, and a trailing \r turns every
+# line of a shell script into a command that does not exist. The scripts run
+# through sh on a user's machine are the ones that cannot survive it:
 #
-#   bin/tracedoc          a #!/bin/sh script Claude Code runs through sh on
-#                         every hook, where a trailing \r turns each line into
-#                         a command that does not exist
-#   cmd/tracedoc/main.go  usage() is a raw string literal, so its bytes are the
-#                         program's bytes; a CRLF checkout of the source would
-#                         stop matching the committed binary and fail the
-#                         staleness guard for a reason that has nothing to do
-#                         with the source
+#   bin/tracedoc          run by Claude Code on every hook
+#   build.sh              run by anyone rebuilding the shipped binaries
+#
+# Nothing else here depends on it, the Go sources least of all. The note that
+# stood here claimed a CRLF checkout would change usage()'s bytes -- it is a
+# raw string literal -- and so fail the staleness guard. That was wrong on
+# three counts: the Go spec discards '\r' inside raw string literals, the
+# staleness guard compares behaviour rather than bytes, and build.sh pins the
+# build ID with -ldflags so no source byte can reach it. Corrected 2026-10-03.
 #
 # The explicit eol skips git's binary detection, so the shipped builds are
 # marked -text by hand below. Without that, a checkout would rewrite every byte
