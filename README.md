@@ -49,6 +49,11 @@ cp -r .claude-plugin hooks bin ~/.claude/skills/ai-tracedoc/
 The manual route uses POSIX shell commands — on Windows, run it in Git Bash.
 The marketplace route above works in any shell.
 
+Pick one route, not both. A skills-directory copy and a marketplace plugin both
+answer to the name `ai-tracedoc`, and Claude Code loads only one of them: the
+installed plugin takes precedence, and `claude plugin list` reports the other as
+`✘ Not loaded`.
+
 Verify:
 
 ```bash

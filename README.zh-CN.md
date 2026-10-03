@@ -45,6 +45,10 @@ cp -r .claude-plugin hooks bin ~/.claude/skills/ai-tracedoc/
 手动安装用的是 POSIX shell 命令——Windows 上请在 Git Bash 里执行。
 上面的市场安装方式不挑 shell。
 
+两种方式**选一种，不要都装**：skills 目录里的副本和市场装的插件同名
+`ai-tracedoc`，Claude Code 只会加载其中一个——已安装的插件优先，另一个会在
+`claude plugin list` 里报 `✘ Not loaded`。
+
 确认：
 
 ```bash
