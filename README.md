@@ -70,6 +70,13 @@ in plugin.json" is not one answer but several. Each install lands in a directory
 named after its version, which means an update adds a path rather than
 overwriting one.
 
+That directory name is the answer, rather than a field read out of the manifest
+inside it: Claude Code refuses to run a plugin's own pre-execution command
+against a path under `~/.claude/`, which is where an installed copy lives. A
+marketplace install is named after its version, so the name is the version —
+whereas a copy loaded in place from a working tree reports that folder's name
+instead.
+
 ## Enable recording (once per project)
 
 Inside Claude Code, in the project you want recorded:
