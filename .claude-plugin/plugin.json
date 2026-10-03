@@ -1,6 +1,6 @@
 {
   "name": "ai-tracedoc",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Records Claude Code development conversations into a per-project TraceDoc ledger: your questions and the AI's final answers, faithfully and without inference.",
   "author": {
     "name": "ddk"

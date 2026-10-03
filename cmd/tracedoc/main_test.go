@@ -864,12 +864,17 @@ func TestCommandFilesAreWellFormed(t *testing.T) {
 		},
 		"version.md": {
 			"disable-model-invocation: true",
-			// It has to read the copy that is running. Any other source
-			// answers a different question: the working tree and the install
-			// cache hold separate copies, and they can carry the same version
-			// string -- on 2026-09-21 both were 0.3.3 -- so the path is the
-			// only part of the answer that tells them apart.
+			// It has to answer for the copy that is running. The working tree
+			// and the install cache hold separate copies and can carry the same
+			// version string, so the running directory is the only thing that
+			// tells them apart -- and since 2026-10-03 that directory's name is
+			// the whole answer, because Claude Code refuses an injected command
+			// naming a path under ~/.claude/, which an installed plugin's root
+			// always is. Reading plugin.json there is not available to us.
 			"${CLAUDE_PLUGIN_ROOT}",
+			// Pre-approval, because an injected command never gets to prompt:
+			// a check that would have asked aborts the invocation instead.
+			`allowed-tools: Bash(basename "${CLAUDE_PLUGIN_ROOT}")`,
 		},
 	}
 
