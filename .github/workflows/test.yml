@@ -8,8 +8,12 @@ jobs:
       fail-fast: false
       # All three platforms, because the port's whole point is that the same
       # source behaves identically on each -- and because the test that
-      # checks bin/ against the source can only check the host's binary, so
-      # the matrix is what covers every shipped build.
+      # checks bin/ against the source can only check the host's binary.
+      # Three runners do not reach six shipped builds. ubuntu-latest is
+      # linux/amd64, windows-latest is windows/amd64 and macos-latest is
+      # darwin/arm64, so linux-arm64, darwin-amd64 and windows-arm64 are
+      # installed by users and executed by no runner here. This narrows the
+      # blind spot; it does not close it.
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
@@ -19,9 +23,10 @@ jobs:
         with:
           go-version: "1.21"
       # git records the executable bit only where the filesystem has one, and
-      # Windows does not, so a commit made from Windows ships these 0644 and
-      # the plugin silently does nothing on Linux and macOS. The bit lives in
-      # git's index, not on disk, so it is checked there.
+      # Windows does not, so a commit made from Windows ships 0644 and every
+      # session on Linux and macOS stops at bin/tracedoc, which names the mode
+      # and the git command that restores it and exits non-zero. The bit lives
+      # in git's index, not on disk, so it is checked there.
       - name: Check the shipped binaries are executable in git
         if: runner.os == 'Linux'
         run: |

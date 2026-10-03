@@ -244,7 +244,9 @@ func TestStateFileMissingOrCorruptReturnsFresh(t *testing.T) {
 
 // --- locking ------------------------------------------------------------
 
-// Design doc §6: the critical section is serialized by the project lock.
+// The ledger's read-modify-write of the state file is a critical section, and
+// the project lock is what serializes it: a second ProjectLock must wait for
+// the first to return rather than run alongside it.
 func TestProjectLockBlocksConcurrentHolder(t *testing.T) {
 	cwd := t.TempDir()
 	acquired := make(chan struct{}, 1)
@@ -468,7 +470,9 @@ func TestAppendSessionOverflowUsesTodayForNewVolume(t *testing.T) {
 	}
 }
 
-// Design doc §5: after the ledger is deleted, the next session recreates it.
+// A ledger deleted between sessions must not strand the state file pointing at
+// a volume that is gone: the next session recreates it, at whatever name the
+// date and project give it, and the ledger is writable again.
 func TestAppendSessionRecreatesAfterDeletion(t *testing.T) {
 	cwd := t.TempDir()
 	state := &State{Sessions: map[string]*SessionState{}}

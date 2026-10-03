@@ -59,18 +59,21 @@ func TestCommittedBinaryMatchesSource(t *testing.T) {
 // runnableCopy returns a copy of binary at a path of its own, having first
 // established that the copy can actually be executed.
 //
-// The copy is here because Windows Smart App Control refuses a path rather than
-// a set of bytes, and this test is about the bytes. Measured on 2026-09-21:
-// bin/tracedoc-windows-amd64.exe was refused 10 times out of 10 while a renamed
-// copy in the same directory ran 10 out of 10 within the same loop -- and the
-// same path, untouched, went from 25 straight refusals at 14:25 to 40 straight
-// runs at 14:28. Every block recorded that day named that one path.
-//
 // The check is here because a refusal reaches Go as a start failure rather than
 // an exit code, and the comparison downstream would report it as "bin/... is
 // stale" -- a claim about the code that nothing supports. A refusal still fails
 // the test, since a guard that goes quiet is the failure this plugin exists to
 // prevent; it just does not pretend to have compared anything.
+//
+// Copying is not what makes it run, and an earlier version of this comment said
+// it was: that Smart App Control refuses a path rather than a set of bytes. It
+// does neither. Measured on 2026-09-21, this same path went from 25 straight
+// refusals at 14:25 to 40 straight runs at 14:28 with nothing done to it, while
+// a renamed copy ran 10 out of 10 beside an original refused 10 out of 10 in the
+// same loop. The verdict moves in time, and every block that day named that one
+// path only because that is the path the tests were running. The copy is here so
+// the probe executes something this test owns and cleans up, and for no reason
+// beyond that.
 func runnableCopy(t *testing.T, binary string) string {
 	t.Helper()
 	data, err := os.ReadFile(binary)

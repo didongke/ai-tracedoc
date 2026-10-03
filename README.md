@@ -159,12 +159,15 @@ Commit selected files only if you intend to share them.
 - Headless sessions (`claude -p`) are recorded too (the Stop hook fires there)
 - Ledger content is verbatim excerpts of AI answers and may contain code or
   secrets — review before sharing
-- The plugin does not read or record environment variables
+- The plugin reads exactly one environment variable, `CLAUDE_PROJECT_DIR`,
+  for the project root — which is what keeps a `cd` during the session from
+  moving the ledger somewhere else. No environment variable is ever recorded
 - Recording relies on Claude Code's internal transcript format, which is
   not a public API — after a Claude Code upgrade, verify with `--self-test`
   (see Development) if entries stop appearing
-- On Windows, Smart App Control may refuse the unsigned binary — per file,
-  intermittently, and with no per-app exclusion. The hook names the cause
+- On Windows, Smart App Control may refuse the unsigned binary —
+  intermittently, with neither the file nor its path predicting it, and with
+  no per-app exclusion. The hook names the cause
   and exits non-zero rather than failing silently. Recording is interrupted
   rather than ended: the ledger resumes from the same position at the next
   hook that runs, so nothing is lost unless the refusal outlasts the

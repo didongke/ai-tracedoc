@@ -140,11 +140,13 @@ New-Item .tracedoc-on            # PowerShell
   都不影响已完成内容的记录；最多可能缺"AI 尚未回答完的最后一个提问"
 - headless（`claude -p`）会话同样逐轮入账（Stop hook 触发）
 - 账本内容是 AI 回答的原文摘录，可能包含代码片段或临时密钥，分享前请检查
-- 插件不读取、不记录任何环境变量
+- 插件只读一个环境变量 `CLAUDE_PROJECT_DIR`（会话的项目根，用来防止会话中途
+  `cd` 把账本带到别处），任何环境变量都不会入账
 - 记录依赖 Claude Code 的内部转录格式（非公开 API）——Claude Code
   升级后若发现不再入账，请用 `--self-test` 自检（见 Development）
-- Windows 上 Smart App Control 可能拒绝未签名的二进制——按文件、间歇性，
-  且不提供按应用排除。hook 会点名原因并以非零码退出，不会静默失败。
+- Windows 上 Smart App Control 可能拒绝未签名的二进制——间歇性，按文件、
+  按路径都预测不了，且不提供按应用排除。hook 会点名原因并以非零码退出，
+  不会静默失败。
   记录是**中断而非终止**：下一个能跑起来的 hook 会从同一位置继续，
   除非拒绝持续到整个会话结束，否则不会丢内容。可用
   `Get-WinEvent -LogName Microsoft-Windows-CodeIntegrity/Operational` 确认；

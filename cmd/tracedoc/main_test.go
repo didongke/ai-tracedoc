@@ -701,7 +701,7 @@ func TestHookExitsZeroWhenTheLockIsUnavailable(t *testing.T) {
 }
 
 // Diagnostics must survive any character a path can contain. The original
-// reported errors through sys.stdout, whose encoding is the locale's, so a
+// reported errors through sys.stderr, whose encoding is the locale's, so a
 // character outside the local codepage raised UnicodeEncodeError -- from
 // inside the except handler, which meant the exception escaped and the hook
 // exited 1 through the very code meant to guarantee it never would.

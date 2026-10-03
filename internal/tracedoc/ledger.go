@@ -49,8 +49,9 @@ type SessionState struct {
 // -NN suffix is volume 1.
 //
 // This is the original's /-(\d+)\.md$/ spelled out rather than compiled: the
-// regexp package is roughly a third of the binary, and this one pattern is
-// the only thing in the plugin that would have needed it.
+// regexp package costs 440-480 KB -- about a sixth of this binary, measured
+// on 2026-10-03 at linux/amd64, darwin/amd64 and windows/amd64 -- and this one
+// pattern is the only thing in the plugin that would have needed it.
 func VolumeNumber(filename string) int {
 	base := strings.TrimSuffix(filename, ".md")
 	dash := strings.LastIndex(base, "-")
@@ -306,13 +307,15 @@ func AppendFooterLink(cwd, prevFn, nextFn string) error {
 		fmt.Sprintf("\n\n---\n\nContinued in: [%s](./%s)\n", nextFn, nextFn))
 }
 
-// ShouldStartNewVolume reports whether a volume of the given size should be
-// closed off. Only a new session may split a volume, and only once the
-// current one has grown past the threshold; continuations never split.
-func ShouldStartNewVolume(size int64, sessionIsNew bool, threshold int64) bool {
-	if !sessionIsNew {
-		return false
-	}
+// ShouldStartNewVolume reports whether a volume that has reached size should
+// be closed off and a new one started.
+//
+// The other half of the rule -- that only a session arriving at a volume may
+// split it, and one already placed in a volume never does -- is not a
+// parameter here because it is not a caller's choice: AppendSession returns
+// early for a session it has already placed, so a continuation cannot reach
+// this call at all. That is what keeps a session's entries contiguous.
+func ShouldStartNewVolume(size, threshold int64) bool {
 	return size > threshold
 }
 
@@ -341,7 +344,7 @@ func AppendSession(cwd, project string, session *Session, state *State,
 	}
 	if current != "" {
 		if info, statErr := os.Stat(filepath.Join(cwd, current)); statErr == nil {
-			if ShouldStartNewVolume(info.Size(), true, threshold) {
+			if ShouldStartNewVolume(info.Size(), threshold) {
 				name, createErr := CreateVolume(cwd, project, today, current,
 					VolumeNumber(current)+1)
 				if createErr != nil {

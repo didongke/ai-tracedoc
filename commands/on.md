@@ -19,4 +19,5 @@ for whoever finds it.
 
 Then tell the user in one line that TraceDoc recording is now on for this
 project, and that `/ai-tracedoc:off` turns it off again. Do not write a ledger
-file yourself: the plugin does that at the end of each session.
+file yourself: questions are recorded as they are answered, by the plugin's own
+hooks, and never by you.

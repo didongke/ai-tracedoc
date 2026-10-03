@@ -11,8 +11,13 @@ import (
 
 // Replacing a file that another process holds open for even a moment -- an
 // indexer, a virus scanner, a sync client -- fails on Windows with a sharing
-// violation that clears on its own. The Python original used os.replace and
-// had no retry, so the failure surfaced as a lost state file.
+// violation that clears on its own.
+//
+// The retry is this port's own addition and there is no field report behind
+// it: the Python original never reached this point on Windows, where its
+// fcntl import failed before anything was written, so no lost state file was
+// ever observed. It covers the case the port makes reachable for the first
+// time, and is reasoned from how Windows behaves rather than from the ledger.
 const (
 	errAccessDenied     = syscall.Errno(5)
 	errSharingViolation = syscall.Errno(32)

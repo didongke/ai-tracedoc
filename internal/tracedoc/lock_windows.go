@@ -16,11 +16,11 @@ var (
 	procUnlockFileEx = kernel32.NewProc("UnlockFileEx")
 )
 
-const (
-	lockfileExclusiveLock = 0x00000002
-	// Without FAIL_IMMEDIATELY, LockFileEx blocks until the range is free.
-	lockfileFailImmediately = 0x00000001
-)
+// lockfileExclusiveLock is LOCKFILE_EXCLUSIVE_LOCK. The other documented flag,
+// LOCKFILE_FAIL_IMMEDIATELY (0x1), is deliberately not passed: it turns the
+// call into a non-blocking one returning ERROR_LOCK_VIOLATION, and the ledger
+// wants the second writer to wait for the first rather than give up.
+const lockfileExclusiveLock = 0x00000002
 
 type overlapped struct {
 	Internal     uintptr

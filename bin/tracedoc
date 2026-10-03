@@ -86,9 +86,11 @@ fi
 # exit 126, so the user sees "Permission denied" with no cause and no cure.
 #
 # That is the shape of the failure they are most likely to meet on Windows.
-# Smart App Control refuses unsigned binaries on reputation, per file hash and
-# intermittently, so the same file runs now and is refused a minute later --
-# and it offers no per-app exclusion, which leaves "turn it off" as the only
+# Smart App Control refuses unsigned binaries on reputation, and the verdict
+# moves in time: the same file, untouched, runs now and is refused a minute
+# later. Neither the bytes nor the path predicts it -- on 2026-09-21 one path
+# went from 25 straight refusals to 40 straight runs with nothing done to it.
+# It offers no per-app exclusion either, which leaves "turn it off" as the only
 # remedy. Verified happening to this plugin's own binary on 2026-09-16.
 #
 # Running the binary as a child instead of exec'ing it costs one extra process
