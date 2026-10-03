@@ -8,7 +8,7 @@ AI 的最终回答——忠实记录，不推断、不提炼。
 ## 原理
 
 - Stop hook（每轮 AI 回答完成后）+ SessionEnd hook（会话结束冲洗）
-  → hooks/record-session.py → 解析会话转录（JSONL）
+  → bin/tracedoc → 解析会话转录（JSONL）
 - 入账内容：你输入的每个问题**原样照录**（中文记中文、英文记英文，不翻译），
   加上 AI 对该问题的最终文字回答
 - 不入账：思考过程、工具调用、文件内容、中间输出、子代理对话
@@ -17,10 +17,12 @@ AI 的最终回答——忠实记录，不推断、不提炼。
 
 ## 环境要求
 
-- Claude Code——仅在 **Linux** 上实测（2.1.260）
-- Python 3.7+（纯标准库，无第三方依赖）
-- macOS 理论兼容（POSIX `fcntl`），未实测
-- Windows 不支持
+- Claude Code——实测于 2.1.260
+- **Linux / macOS / Windows 均可，无需额外安装任何东西**
+
+插件随仓库分发六个平台的预编译二进制（Windows、Linux、macOS，各含 x86-64
+与 arm64），因此没有运行时依赖：不需要 Python、不需要 Go、运行时不联网。
+Windows 上通过 Git Bash 调用——Claude Code 本身已依赖它。
 
 ## 安装（每台机器一次）
 
@@ -37,8 +39,11 @@ claude plugin install ai-tracedoc@ai-tracedoc
 git clone https://github.com/didongke/ai-tracedoc.git
 cd ai-tracedoc
 mkdir -p ~/.claude/skills/ai-tracedoc
-cp -r .claude-plugin hooks src ~/.claude/skills/ai-tracedoc/
+cp -r .claude-plugin hooks bin ~/.claude/skills/ai-tracedoc/
 ```
+
+手动安装用的是 POSIX shell 命令——Windows 上请在 Git Bash 里执行。
+上面的市场安装方式不挑 shell。
 
 确认：
 
@@ -47,11 +52,42 @@ claude plugin list                  # 期望出现 ai-tracedoc，Status ✔ enab
 claude plugin details ai-tracedoc   # Hooks (2) SessionEnd, Stop
 ```
 
+## 当前跑的是哪个版本
+
+```
+/ai-tracedoc:version
+```
+
+输出 Claude Code 实际正在运行的那份副本的版本号。插件可能同时存在于多处——
+你正在开发的仓库、市场源、以及 `~/.claude/plugins/cache/` 下每一个装过的版本
+——它们互不一致，所以"plugin.json 里的版本号"不是唯一答案。每次安装都落在以
+版本号命名的目录里，这意味着升级是新增一个路径，而不是覆盖旧的。
+
 ## 启用记录（每个项目一次）
 
-```bash
-touch .tracedoc-on
+在 Claude Code 里，切到要记录的项目，输入：
+
 ```
+/ai-tracedoc:on
+```
+
+`/ai-tracedoc:off` 关闭，已写下的账本原样保留。记录是**逐项目、默认关闭**的，
+没开启过的项目不会产生任何文件。
+
+关闭是**到此为止**，不是暂停：关闭期间说过的内容不会在重新开启时被补录进去，
+账本在那里留一段空白。这段空白正是你关掉它的意义。
+
+开关就是项目根目录下一个名为 `.tracedoc-on` 的文件，所以你也可以在 shell 里
+自己创建——挑一条适合你的：
+
+```bash
+touch .tracedoc-on               # Git Bash / macOS / Linux
+type nul > .tracedoc-on          # cmd.exe
+New-Item .tracedoc-on            # PowerShell
+```
+
+手边有插件的 `bin` 目录的话，`tracedoc --enable` / `tracedoc --disable`
+效果相同，且不挑 shell。
 
 之后该项目的问答**逐轮实时入账**（AI 回答完成即记录），会话结束时冲洗收尾，
 无需任何操作。两层开关都打开前不产生任何文件。
@@ -63,13 +99,21 @@ touch .tracedoc-on
   `20260906-my-project-tracedoc.md`
 - 超过 200 KB 自动分卷：续卷名为 `...-tracedoc-02.md`、`-03.md`…，
   卷间有 "Continued in / Continued from" 衔接标注；一个会话绝不跨卷
-- 条目格式：
+- 条目格式。空行是格式本身的一部分，不是排版残留——账本是与已落盘文件之间的
+  契约，这些空行是刻意复现的，请勿"顺手整理"。
 
 ```markdown
 ## 2026-09-06 · 会话标题
 
+<!-- session: 8f3c1a… -->
+
 **Question:** 2026-09-06 14:32 · 为什么这里这样设计？
+
+
 **Answer:** ……AI 的最终回答，原样照录……
+
+
+**Question:** 2026-09-06 14:35 · 一个 AI 从未回答的提问
 ```
 
 ## 建议的 .gitignore
@@ -91,22 +135,40 @@ touch .tracedoc-on
 - 插件不读取、不记录任何环境变量
 - 记录依赖 Claude Code 的内部转录格式（非公开 API）——Claude Code
   升级后若发现不再入账，请用 `--self-test` 自检（见 Development）
+- Windows 上 Smart App Control 可能拒绝未签名的二进制——按文件、间歇性，
+  且不提供按应用排除。hook 会点名原因并以非零码退出，不会静默失败。
+  记录是**中断而非终止**：下一个能跑起来的 hook 会从同一位置继续，
+  除非拒绝持续到整个会话结束，否则不会丢内容。可用
+  `Get-WinEvent -LogName Microsoft-Windows-CodeIntegrity/Operational` 确认；
+  真正的解法是 Authenticode 签名
 
 ## Development
+
+编译发布二进制（六个平台，在任何机器上都能交叉编译）：
+
+```bash
+sh build.sh
+```
 
 运行测试：
 
 ```bash
-python3 -m unittest discover -s tests -v
+go test ./...
 ```
+
+`bin/` 是入库的，所以改完任何 Go 源码都要重跑 `build.sh` 并提交结果。有一个
+测试会把入库的二进制与现场编译的版本对比，不一致就失败——否则过期的二进制会
+带着一片绿色的测试静默发布出去。
 
 对真实转录离线验证提取管线（不写任何账本）：
 
 ```bash
-python3 hooks/record-session.py --self-test ~/.claude/projects/<项目slug>/<会话ID>.jsonl
+bin/tracedoc --self-test ~/.claude/projects/<项目slug>/<会话ID>.jsonl
 ```
 
-核心层（`src/tracedoc/`）与 agent 无关；仅 `hooks/` 为 Claude Code 专用。
+`internal/tracedoc/` 是与 agent 无关的核心层，`cmd/tracedoc/` 是 Claude Code
+适配器，`bin/tracedoc` 是挑选平台二进制的 shell 分发器。仅 `hooks/` 与 `cmd/`
+为 Claude Code 专用。
 
 ## 写作
 

@@ -1,0 +1,108 @@
+#!/bin/sh
+# ai-tracedoc platform dispatcher.
+#
+# Claude Code has no declarative platform targeting for plugin components:
+# the component loader carries no platform dimension, and the hook `if` field
+# is a tool-permission matcher available only on the Pre/PostToolUse family.
+# So the platform choice has to happen here, in the shell -- which is `sh` on
+# macOS and Linux, and Git Bash on Windows. That is why hooks.json invokes
+# this script through `sh` rather than executing it directly: `sh <script>`
+# works whatever the file mode says, so only the platform binaries below
+# depend on the executable bit.
+#
+# Exit codes distinguish two different kinds of "cannot record":
+#
+#   0  this platform is not servable at all (an OS or CPU we ship nothing
+#      for). Nothing the user can fix, so it stays quiet.
+#   1  the plugin is installed incorrectly -- supported platform, but the
+#      build is missing or cannot be executed. That is deterministic and
+#      will happen on every single session, so it is loud. Skipping forever
+#      in silence is the exact failure this plugin exists to prevent.
+#
+# Runtime failures inside the binary are a third case and always exit 0:
+# a transient problem must never block the session it is observing.
+
+# The coreutils this script needs. They are not shell builtins, so it needs a
+# working POSIX environment -- which is the same thing Claude Code needs to
+# run a shell-form hook at all. Naming them beats letting the failure surface
+# as "unsupported OS ''", which reads like a platform problem rather than a
+# PATH problem.
+if ! command -v uname >/dev/null 2>&1 || ! command -v dirname >/dev/null 2>&1; then
+  echo "ai-tracedoc: 'uname'/'dirname' not found on PATH; recording skipped" >&2
+  exit 0
+fi
+
+# dirname rather than ${0%/*}. On Windows the path arrives with backslashes,
+# which a POSIX parameter expansion does not split on -- it would return the
+# whole string and send the binary path relative to the wrong directory.
+# MSYS's dirname understands both separators.
+here=$(dirname "$0")
+
+case "$(uname -s)" in
+  Linux*)  os=linux ;;
+  Darwin*) os=darwin ;;
+  MINGW*|MSYS*|CYGWIN*) os=windows ;;
+  *)
+    echo "ai-tracedoc: unsupported OS '$(uname -s)'; recording skipped" >&2
+    exit 0
+    ;;
+esac
+
+case "$(uname -m)" in
+  x86_64|amd64) arch=amd64 ;;
+  arm64|aarch64) arch=arm64 ;;
+  *)
+    echo "ai-tracedoc: unsupported arch '$(uname -m)'; recording skipped" >&2
+    exit 0
+    ;;
+esac
+
+suffix=
+[ "$os" = windows ] && suffix=.exe
+binary="$here/tracedoc-$os-$arch$suffix"
+
+if [ ! -f "$binary" ]; then
+  echo "ai-tracedoc: no build for $os/$arch at $binary" >&2
+  echo "  the plugin is installed incorrectly; reinstall it." >&2
+  exit 1
+fi
+
+# Windows: the executable bit is not meaningful for a .exe and Git Bash does
+# not report it consistently, so it is only checked where it means something.
+#
+# Elsewhere a build that cannot be executed is a broken install, not an
+# unsupported platform. It happens easily: git does not record the executable
+# bit on a Windows checkout at all (core.filemode defaults to false there),
+# so binaries committed from Windows arrive on Linux and macOS un-runnable.
+if [ "$os" != windows ] && [ ! -x "$binary" ]; then
+  echo "ai-tracedoc: $binary is not executable" >&2
+  echo "  from the repository, restore the mode in git's index:" >&2
+  echo "    git update-index --chmod=+x bin/tracedoc bin/tracedoc-linux-* bin/tracedoc-darwin-*" >&2
+  exit 1
+fi
+
+# exec would be tidier, and it is what this script used to do, but it cannot
+# report why it failed: a failed exec makes the shell print the raw errno and
+# exit 126, so the user sees "Permission denied" with no cause and no cure.
+#
+# That is the shape of the failure they are most likely to meet on Windows.
+# Smart App Control refuses unsigned binaries on reputation, per file hash and
+# intermittently, so the same file runs now and is refused a minute later --
+# and it offers no per-app exclusion, which leaves "turn it off" as the only
+# remedy. Verified happening to this plugin's own binary on 2026-09-16.
+#
+# Running the binary as a child instead of exec'ing it costs one extra process
+# in the common path and buys the ability to name the cause. 126 is unambiguous:
+# the binary itself only ever exits 0 or 1.
+"$binary" "$@"
+status=$?
+if [ "$status" -eq 126 ]; then
+  echo "ai-tracedoc: $binary could not be executed (permission denied)" >&2
+  echo "  on Windows this is usually Smart App Control refusing an unsigned" >&2
+  echo "  binary. Confirm with:" >&2
+  echo "    Get-WinEvent -LogName Microsoft-Windows-CodeIntegrity/Operational" >&2
+  echo "  Recording is interrupted rather than ended: the ledger resumes from" >&2
+  echo "  the same position at the next hook that runs." >&2
+  exit 1
+fi
+exit "$status"

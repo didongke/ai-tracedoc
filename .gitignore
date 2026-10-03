@@ -1,2 +1,15 @@
-__pycache__/
-*.pyc
+# The released binaries in bin/ are committed on purpose. Shipping them is
+# what makes installing this plugin free of any toolchain: no Python, no Go,
+# no network. Do not add bin/ here.
+
+*.test
+coverage.out
+
+# The plugin's own runtime files. This repository is recorded by the plugin it
+# contains, so these land in its root as a consequence of dogfooding rather
+# than being part of it -- a lock file was already sitting here untracked.
+# Users who opt their own projects in need the same three lines.
+.tracedoc-on
+.tracedoc-state.json
+.tracedoc.lock
+*-tracedoc*.md

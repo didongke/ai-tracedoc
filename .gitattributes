@@ -1,0 +1,26 @@
+# Line endings are pinned to LF, and this file is the only thing that decides.
+#
+# The machine this was written on has core.autocrlf=true, so without this file
+# a checkout rewrites the working tree to CRLF. Two tracked files cannot
+# survive that:
+#
+#   bin/tracedoc          a #!/bin/sh script Claude Code runs through sh on
+#                         every hook, where a trailing \r turns each line into
+#                         a command that does not exist
+#   cmd/tracedoc/main.go  usage() is a raw string literal, so its bytes are the
+#                         program's bytes; a CRLF checkout of the source would
+#                         stop matching the committed binary and fail the
+#                         staleness guard for a reason that has nothing to do
+#                         with the source
+#
+# The explicit eol skips git's binary detection, so the shipped builds are
+# marked -text by hand below. Without that, a checkout would rewrite every byte
+# of them.
+* text=auto eol=lf
+
+bin/tracedoc-darwin-amd64 -text
+bin/tracedoc-darwin-arm64 -text
+bin/tracedoc-linux-amd64 -text
+bin/tracedoc-linux-arm64 -text
+bin/tracedoc-windows-amd64.exe -text
+bin/tracedoc-windows-arm64.exe -text
