@@ -82,6 +82,12 @@ marketplace install is named after its version, so the name is the version —
 whereas a copy loaded in place from a working tree reports that folder's name
 instead.
 
+A marketplace added from a local directory rather than from the repository is
+what produces that second answer: the plugin is loaded in place from the
+directory, so what comes back is the checkout's folder name — `ai-tracedoc-main`
+— which does name the copy that is running, without being a version of it.
+Install from the repository to get a version number back.
+
 ## Enable recording (once per project)
 
 Inside Claude Code, in the project you want recorded:
