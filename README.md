@@ -6,6 +6,15 @@ no inference and no summarization.
 
 [中文说明](README.zh-CN.md)
 
+> **This build is frozen.** Since 2026-10-16 the maintained build is
+> [`ai-tracedoc-mods`](https://github.com/didongke/ai-tracedoc-mods) — the same
+> plugin as a Claude Code hooks module, shipping no binary at all. Fixes and
+> features land there and nowhere else.
+>
+> It is not a drop-in: both write the **same ledger filename** with different
+> entry layouts, so run one at a time. This build stays published because a
+> Claude Code below 2.1.287 cannot load a hooks module, and has only this.
+
 ## How it works
 
 - Stop hook (after every AI response) + SessionEnd hook (flush at session end)
@@ -29,6 +38,9 @@ network access at run time. On Windows the hook is launched through Git Bash,
 which Claude Code already needs.
 
 ## Install (once per machine)
+
+Only a machine below Claude Code 2.1.287 needs this build; otherwise install
+[`ai-tracedoc-mods`](https://github.com/didongke/ai-tracedoc-mods).
 
 Via the plugin marketplace (recommended):
 

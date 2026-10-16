@@ -5,6 +5,14 @@ AI 的最终回答——忠实记录，不推断、不提炼。
 
 [English](README.md)
 
+> **本版已冻结。** 自 2026-10-16 起，在维护的是
+> [`ai-tracedoc-mods`](https://github.com/didongke/ai-tracedoc-mods)：同一个
+> 插件，改以 Claude Code 钩子模块的方式运行，不带任何二进制。修问题、加功能
+> 都只落那边。
+>
+> 两者不能互换：写的是**同一个账簿文件名**，条目排版不同，所以只能开一个。
+> 本版继续挂着，因为 Claude Code 低于 2.1.287 加载不了钩子模块，只有它可跑。
+
 ## 原理
 
 - Stop hook（每轮 AI 回答完成后）+ SessionEnd hook（会话结束冲洗）
@@ -25,6 +33,9 @@ AI 的最终回答——忠实记录，不推断、不提炼。
 Windows 上通过 Git Bash 调用——Claude Code 本身已依赖它。
 
 ## 安装（每台机器一次）
+
+只有 Claude Code 低于 2.1.287 的机器才需要本版；否则请装
+[`ai-tracedoc-mods`](https://github.com/didongke/ai-tracedoc-mods)。
 
 通过插件市场安装（推荐）：
 
